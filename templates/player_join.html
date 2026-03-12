@@ -1,0 +1,122 @@
+{% extends 'base.html' %}
+{% block title %}O'yinga qo'shilish{% endblock %}
+{% block extra_style %}
+<style>
+.join-page {
+  min-height: calc(100vh - 60px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.join-card {
+  background: rgba(255,255,255,0.1);
+  border-radius: 20px;
+  padding: 40px;
+  width: 100%;
+  max-width: 480px;
+  backdrop-filter: blur(10px);
+}
+.game-info {
+  text-align: center;
+  margin-bottom: 30px;
+}
+.game-pin-badge {
+  display: inline-block;
+  background: #ffd60a;
+  color: #1a1a1a;
+  padding: 6px 20px;
+  border-radius: 20px;
+  font-weight: 900;
+  font-size: 1.1rem;
+  letter-spacing: 4px;
+  margin-bottom: 8px;
+}
+.avatars {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.avatar-option {
+  aspect-ratio: 1;
+  border-radius: 12px;
+  border: 3px solid transparent;
+  background: rgba(255,255,255,0.1);
+  font-size: 2.2rem;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+}
+.avatar-option:hover { border-color: rgba(255,255,255,0.5); transform: scale(1.05); }
+.avatar-option.selected { border-color: #ffd60a; background: rgba(255,214,10,0.15); }
+.nick-input {
+  width: 100%;
+  padding: 14px 18px;
+  font-size: 1.1rem;
+  font-weight: 700;
+  border-radius: 10px;
+  border: 2px solid rgba(255,255,255,0.2);
+  background: rgba(255,255,255,0.1);
+  color: white;
+  font-family: 'Montserrat', sans-serif;
+  margin-bottom: 16px;
+}
+.nick-input:focus { outline: none; border-color: #ffd60a; }
+.nick-input::placeholder { opacity: 0.4; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="join-page">
+  <div class="join-card">
+    <div class="game-info">
+      <div class="game-pin-badge">{{ session.game_pin }}</div>
+      <h2 style="margin-top:8px;">{{ session.quiz_set.name }}</h2>
+      <p style="opacity:0.6;font-size:0.9rem;">Host: {{ session.host.username }}</p>
+    </div>
+
+    {% if error %}
+    <div class="alert alert-error">⚠️ {{ error }}</div>
+    {% endif %}
+
+    <form method="POST">
+      {% csrf_token %}
+      <input type="hidden" name="avatar" id="selectedAvatar" value="🎮">
+
+      <label style="font-weight:700;opacity:0.85;display:block;margin-bottom:10px;">
+        Avatar tanlang:
+      </label>
+      <div class="avatars">
+        {% for emoji in avatars %}
+        <div class="avatar-option {% if forloop.first %}selected{% endif %}"
+             onclick="selectAvatar(this, '{{ emoji }}')">{{ emoji }}</div>
+        {% endfor %}
+      </div>
+
+      <label style="font-weight:700;opacity:0.85;display:block;margin-bottom:8px;">
+        Nicknamingiz:
+      </label>
+      <input type="text" name="nickname" class="nick-input"
+             placeholder="Ismingizni kiriting..." maxlength="20" autofocus required>
+
+      <button type="submit" class="btn btn-primary"
+              style="width:100%;padding:16px;font-size:1.1rem;border-radius:12px;">
+        🎮 O'yinga Kirish
+      </button>
+    </form>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+function selectAvatar(el, emoji) {
+  document.querySelectorAll('.avatar-option').forEach(a => a.classList.remove('selected'));
+  el.classList.add('selected');
+  document.getElementById('selectedAvatar').value = emoji;
+}
+</script>
+{% endblock %}

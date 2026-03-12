@@ -1,0 +1,305 @@
+{% extends 'base.html' %}
+{% block title %}{{ player.nickname }} - Quiz Arena{% endblock %}
+{% block extra_style %}
+<style>
+body { overflow: hidden; }
+.screen {
+  display: none;
+  min-height: calc(100vh - 60px);
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  text-align: center;
+  animation: fadeIn 0.3s ease;
+}
+.screen.active { display: flex; }
+@keyframes fadeIn { from { opacity: 0; transform: scale(0.97); } to { opacity: 1; transform: scale(1); } }
+
+/* ── Lobby ── */
+#screen-lobby .avatar-big { font-size: 4rem; margin-bottom: 12px; }
+#screen-lobby .waiting-text {
+  font-size: 1rem;
+  opacity: 0.7;
+  margin-top: 16px;
+  animation: pulse 1.5s infinite;
+}
+@keyframes pulse { 0%,100%{opacity:.5} 50%{opacity:1} }
+
+/* ── Question ── */
+#screen-question { padding: 0; }
+.q-header {
+  width: 100%;
+  background: var(--purple-dark);
+  padding: 20px;
+  position: relative;
+}
+.q-number { font-size: 0.85rem; opacity: 0.7; }
+.q-text {
+  font-size: clamp(1.2rem, 4vw, 1.8rem);
+  font-weight: 800;
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 10px 0;
+}
+.q-timer-bar {
+  height: 6px;
+  background: rgba(255,255,255,0.2);
+  width: 100%;
+  margin-top: 10px;
+}
+.q-timer-fill {
+  height: 100%;
+  background: #ffd60a;
+  transition: width 1s linear;
+}
+.q-timer-num {
+  font-size: 3rem;
+  font-weight: 900;
+  color: #ffd60a;
+  margin: 10px 0;
+}
+
+.answers-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  padding: 16px;
+  width: 100%;
+  max-width: 680px;
+  flex: 1;
+  align-content: center;
+}
+.ans-btn {
+  padding: 24px 16px;
+  border-radius: 14px;
+  border: none;
+  font-family: 'Montserrat', sans-serif;
+  font-size: clamp(0.9rem, 3vw, 1.1rem);
+  font-weight: 800;
+  color: white;
+  cursor: pointer;
+  transition: transform 0.1s, filter 0.1s;
+  position: relative;
+  overflow: hidden;
+  min-height: 90px;
+}
+.ans-btn:hover { transform: scale(1.03); filter: brightness(1.1); }
+.ans-btn:active { transform: scale(0.97); }
+.ans-btn.red    { background: var(--red); }
+.ans-btn.blue   { background: var(--blue); }
+.ans-btn.yellow { background: var(--yellow); }
+.ans-btn.green  { background: var(--green); }
+.ans-btn .shape {
+  font-size: 1.4rem;
+  display: block;
+  margin-bottom: 6px;
+}
+.ans-btn.disabled { opacity: 0.4; cursor: not-allowed; pointer-events: none; }
+
+/* ── Result feedback ── */
+#screen-feedback .result-icon { font-size: 5rem; margin-bottom: 16px; animation: bounce 0.5s; }
+@keyframes bounce { 0%,100%{transform:scale(1)} 50%{transform:scale(1.2)} }
+#screen-feedback .pts {
+  font-size: 2.5rem;
+  font-weight: 900;
+  color: #ffd60a;
+}
+#screen-feedback .total { font-size: 1rem; opacity: 0.7; margin-top: 8px; }
+
+/* ── Review ── */
+#screen-review .rank-badge {
+  font-size: 3rem;
+  font-weight: 900;
+  color: #ffd60a;
+}
+
+/* ── Game over ── */
+#screen-gameover .podium-score {
+  font-size: 2rem;
+  font-weight: 900;
+  color: #ffd60a;
+  margin-top: 12px;
+}
+</style>
+{% endblock %}
+
+{% block content %}
+<!-- LOBBY -->
+<div id="screen-lobby" class="screen active">
+  <div class="avatar-big">{{ player.avatar }}</div>
+  <h2>{{ player.nickname }}</h2>
+  <div class="waiting-text">⏳ Host o'yinni boshlaguncha kuting...</div>
+  <div style="margin-top:24px;opacity:0.5;font-size:0.85rem;">
+    Game PIN: <strong style="color:#ffd60a;letter-spacing:3px;">{{ session.game_pin }}</strong>
+  </div>
+</div>
+
+<!-- QUESTION -->
+<div id="screen-question" class="screen">
+  <div class="q-header">
+    <div class="q-number" id="q-number">Savol 1 / 1</div>
+    <div class="q-text" id="q-text">...</div>
+    <div class="q-timer-bar"><div class="q-timer-fill" id="q-timer-fill"></div></div>
+  </div>
+  <div class="q-timer-num" id="q-timer-num">15</div>
+  <div class="answers-grid" id="answers-grid"></div>
+</div>
+
+<!-- ANSWER FEEDBACK -->
+<div id="screen-feedback" class="screen">
+  <div class="result-icon" id="result-icon">✅</div>
+  <h2 id="result-msg">To'g'ri!</h2>
+  <div class="pts" id="result-pts">+1000</div>
+  <div class="total" id="result-total">Jami: 1000 ball</div>
+</div>
+
+<!-- REVIEW (between questions) -->
+<div id="screen-review" class="screen">
+  <h2 style="margin-bottom:4px;">📊 Natijalar</h2>
+  <div id="review-rank" class="rank-badge">#1</div>
+  <div id="review-score" style="opacity:0.7;margin-bottom:20px;">0 ball</div>
+  <div id="review-status" style="opacity:0.6;font-size:0.9rem;">⏳ Keyingi savol kutilmoqda...</div>
+</div>
+
+<!-- GAME OVER -->
+<div id="screen-gameover" class="screen">
+  <div style="font-size:3rem;margin-bottom:12px;">🏁</div>
+  <h1>O'yin tugadi!</h1>
+  <div class="podium-score" id="final-score">0</div>
+  <div style="opacity:0.7;margin-top:8px;">umumiy ball</div>
+  <div id="final-rank" style="font-size:1.1rem;margin-top:16px;opacity:0.8;"></div>
+  <a href="/" class="btn btn-primary btn-big" style="margin-top:32px;">🏠 Bosh sahifa</a>
+</div>
+{% endblock %}
+
+{% block extra_script %}
+<script>
+const GAME_PIN = "{{ session.game_pin }}";
+const PLAYER_ID = {{ player.id }};
+let socket, timerInterval, timeLeft, totalTime, currentIndex = 0;
+let myScore = 0, answered = false;
+
+function show(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+function connect() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  socket = new WebSocket(`${proto}://${location.host}/ws/game/${GAME_PIN}/player/${PLAYER_ID}/`);
+
+  socket.onopen = () => {
+    socket.send(JSON.stringify({ action: 'player_ready', player_id: PLAYER_ID }));
+  };
+
+  socket.onmessage = (e) => {
+    const data = JSON.parse(e.data);
+    handlers[data.action]?.(data);
+  };
+
+  socket.onclose = () => setTimeout(connect, 2000);
+}
+
+const handlers = {
+  lobby_update: () => {},
+
+  question_show: (data) => {
+    answered = false;
+    currentIndex = data.index;
+    totalTime = data.question.time_limit;
+    timeLeft = totalTime;
+
+    document.getElementById('q-number').textContent =
+      `Savol ${data.index + 1} / ${data.question.total}`;
+    document.getElementById('q-text').textContent = data.question.text;
+    document.getElementById('q-timer-num').textContent = timeLeft;
+    document.getElementById('q-timer-fill').style.width = '100%';
+
+    const grid = document.getElementById('answers-grid');
+    grid.innerHTML = '';
+    const shapes = ['▲', '◆', '●', '■'];
+    data.question.answers.forEach((ans, i) => {
+      const btn = document.createElement('button');
+      btn.className = `ans-btn ${ans.color}`;
+      btn.innerHTML = `<span class="shape">${shapes[i]}</span>${ans.text}`;
+      btn.onclick = () => submitAnswer(ans.id);
+      grid.appendChild(btn);
+    });
+
+    show('screen-question');
+    startTimer();
+  },
+
+  answer_result: (data) => {
+    clearInterval(timerInterval);
+    myScore = data.total_score;
+    document.getElementById('result-icon').textContent = data.is_correct ? '✅' : '❌';
+    document.getElementById('result-msg').textContent = data.is_correct ? 'To\'g\'ri!' : 'Noto\'g\'ri!';
+    document.getElementById('result-pts').textContent = `+${data.points_earned}`;
+    document.getElementById('result-total').textContent = `Jami: ${data.total_score} ball`;
+    show('screen-feedback');
+    // 1.5s feedback ko'rinadi, keyin review_show kelganda screen-review ga o'tadi
+  },
+
+  review_show: (data) => {
+    const rank = data.leaderboard.findIndex(p => p.score === myScore) + 1 || '?';
+    document.getElementById('review-rank').textContent = `#${rank}`;
+    document.getElementById('review-score').textContent = `${myScore} ball`;
+
+    // 1.5s kutib keyin review/gameover ekraniga o'tish
+    setTimeout(() => {
+      if (data.is_last) {
+        document.getElementById('final-score').textContent = myScore + ' ball';
+        document.getElementById('final-rank').textContent = `Sizning o'rningiz: #${rank}`;
+        show('screen-gameover');
+      } else {
+        document.getElementById('review-status').textContent = '⏳ Keyingi savol kutilmoqda...';
+        show('screen-review');
+      }
+    }, 1500);
+  },
+
+  game_end: (data) => {
+    const rank = data.leaderboard.findIndex(p => p.score === myScore) + 1 || '?';
+    document.getElementById('final-score').textContent = myScore + ' ball';
+    document.getElementById('final-rank').textContent = `Sizning o'rningiz: #${rank}`;
+    show('screen-gameover');
+  },
+};
+
+function submitAnswer(answerId) {
+  if (answered) return;
+  answered = true;
+  const elapsed = totalTime - timeLeft;
+  document.querySelectorAll('.ans-btn').forEach(b => b.classList.add('disabled'));
+  socket.send(JSON.stringify({
+    action: 'submit_answer',
+    player_id: PLAYER_ID,
+    answer_id: answerId,
+    elapsed: elapsed,
+  }));
+}
+
+function startTimer() {
+  clearInterval(timerInterval);
+  timerInterval = setInterval(() => {
+    timeLeft--;
+    document.getElementById('q-timer-num').textContent = timeLeft;
+    document.getElementById('q-timer-fill').style.width = (timeLeft / totalTime * 100) + '%';
+    if (timeLeft <= 0) {
+      clearInterval(timerInterval);
+      if (!answered) {
+        answered = true;
+        socket.send(JSON.stringify({
+          action: 'submit_answer', player_id: PLAYER_ID,
+          answer_id: null, elapsed: totalTime,
+        }));
+      }
+    }
+  }, 1000);
+}
+
+connect();
+</script>
+{% endblock %}
