@@ -50,34 +50,6 @@ body{overflow:hidden;background:#12002b}
 /* ═══════ RESULTS DASHBOARD ═══════ */
 #screen-results{background:#12002b;justify-content:flex-start;padding:0}
 
-/* --- Top bar --- */
-.topbar{
-  width:100%;flex-shrink:0;
-  background:linear-gradient(135deg,#2d0e5c,#46178f);
-  padding:11px 20px;display:flex;align-items:center;gap:14px;
-  box-shadow:0 4px 24px rgba(0,0,0,.5);
-}
-.q-badge{
-  background:rgba(255,255,255,.14);border-radius:7px;
-  padding:4px 11px;font-size:.74rem;font-weight:800;white-space:nowrap;
-}
-.q-title{
-  flex:1;font-size:clamp(.85rem,2.1vw,1.3rem);
-  font-weight:800;text-align:center;
-}
-/* conic timer */
-.ctimer{
-  width:60px;height:60px;flex-shrink:0;border-radius:50%;
-  display:flex;align-items:center;justify-content:center;position:relative;
-  background:conic-gradient(#ffd60a calc(var(--p,100)*1%),rgba(255,255,255,.1) 0);
-  transition:background .85s linear;
-}
-.ctimer::before{content:'';position:absolute;inset:7px;border-radius:50%;background:#2d0e5c}
-.ctimer span{position:relative;z-index:1;font-size:1.3rem;font-weight:900;color:#ffd60a}
-.ctimer.urgent{animation:hb .45s infinite}
-.ctimer.urgent span{color:#ff4d4d}
-@keyframes hb{0%,100%{transform:scale(1)}50%{transform:scale(1.1)}}
-
 /* --- Stats bar (kirdi/ishlayapti/tugatdi) --- */
 .statsbar{
   width:100%;flex-shrink:0;
@@ -235,17 +207,6 @@ body{overflow:hidden;background:#12002b}
 <!-- ══ RESULTS DASHBOARD ══ -->
 <div id="screen-results" class="screen">
 
-  <!-- Top bar: savol + timer -->
-  <div class="topbar">
-    <div class="q-badge" id="q-badge">1/{{ total_questions }}</div>
-    <div class="q-title" id="q-title">...</div>
-    <div style="text-align:center;flex-shrink:0;min-width:52px;">
-      <div style="font-size:1.4rem;font-weight:900;color:#ffd60a;line-height:1" id="ans-n">0</div>
-      <div style="font-size:.56rem;opacity:.35;letter-spacing:1px;text-transform:uppercase">javob</div>
-    </div>
-    <div class="ctimer" id="ctimer" style="--p:100"><span id="tnum">—</span></div>
-  </div>
-
   <!-- Stats: kirdi / ishlayapti / tugatdi -->
   <div class="statsbar">
     <div class="stat-item">
@@ -323,7 +284,7 @@ const SHAPES   = ['\u25b2','\u25c6','\u25cf','\u25a0'];
 const COLORS   = ['red','blue','yellow','green'];
 const MEDALS   = ['\ud83e\udd47','\ud83e\udd48','\ud83e\udd49'];
 const TOPS     = ['r1','r2','r3'];
-const AUTO_DELAY = 4000; // review dan keyin keyingi savolga o'tish (ms)
+const AUTO_DELAY = 4000;
 
 let socket, timerInterval, autoInterval;
 let timeLeft=0, totalTime=0, currentIndex=-1, playerCount=0;
@@ -334,6 +295,18 @@ let reviewDone=false;
 function show(id){
   document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
   document.getElementById(id).classList.add('active');
+}
+
+/* ── Navbar yashirish / ko'rsatish ── */
+function hideNavbar(){
+  const nav = document.querySelector('nav') || document.querySelector('.navbar') || document.querySelector('header');
+  if(nav) nav.style.display='none';
+  document.querySelectorAll('.screen').forEach(s=>s.style.inset='0');
+}
+function showNavbar(){
+  const nav = document.querySelector('nav') || document.querySelector('.navbar') || document.querySelector('header');
+  if(nav) nav.style.display='';
+  document.querySelectorAll('.screen').forEach(s=>s.style.inset='60px 0 0 0');
 }
 
 /* ── WebSocket ── */
@@ -368,15 +341,11 @@ const H={
     curAnswers.forEach(a=>ansCounts[a.id]=0);
     leaderboard.forEach(p=>prevScores[p.nickname]=p.score);
 
-    document.getElementById('q-badge').textContent=(d.index+1)+'/'+d.question.total;
-    document.getElementById('q-title').textContent=d.question.text;
-    document.getElementById('ans-n').textContent='0';
     document.getElementById('ans-prog-lbl').textContent='0/'+playerCount;
     document.getElementById('ans-prog').style.width='0';
-    document.getElementById('tnum').textContent=timeLeft;
-    setCTimer(100);
-    document.getElementById('ctimer').classList.remove('urgent');
     document.getElementById('auto-bar').style.display='none';
+
+    hideNavbar();
 
     buildChart(d.player_stats || null);
     if(d.stats) updateStats(d.stats);
@@ -386,22 +355,20 @@ const H={
 
   answer_progress(d){
     const pct=d.total>0?(d.answered/d.total*100):0;
-    document.getElementById('ans-n').textContent=d.answered;
     document.getElementById('ans-prog-lbl').textContent=d.answered+'/'+d.total;
     document.getElementById('ans-prog').style.width=pct+'%';
     if(d.counts){Object.entries(d.counts).forEach(([id,cnt])=>ansCounts[id]=cnt);}
     if(d.player_stats){playerStats=d.player_stats;buildChart(null);}
     if(d.stats) updateStats(d.stats);
-    // Hamma javob berdi → avtomatik review
     if(d.answered>=d.total&&d.total>0&&!reviewDone){
-      clearInterval(timerInterval);setCTimer(0);
+      clearInterval(timerInterval);
       socket.send(JSON.stringify({action:'show_review',index:currentIndex}));
     }
   },
 
   review_show(d){
     reviewDone=true;
-    clearInterval(timerInterval);setCTimer(0);
+    clearInterval(timerInterval);
     leaderboard=d.leaderboard;
     renderLeaderboard(d.leaderboard);
     if(d.player_stats){playerStats=d.player_stats;buildChart(null);}
@@ -409,19 +376,17 @@ const H={
 
     const isLast=currentIndex>=TOTAL_Q-1;
     if(isLast){
-      // Oxirgi savol: results ekranida qolib "Yakunlash" tugmasi chiqadi
       showFinishBtn();
     } else {
-      // Oraliq savollar: avtomatik keyingisiga o'tadi
       startAutoAdvance();
     }
   },
 
   game_end(d){
-    // Host: results ekranda qoladi, faqat podium overlay chiqadi
     clearAutoAdvance();
     leaderboard=d.leaderboard;
     if(d.stats) updateStats(d.stats);
+    showNavbar();
     renderPodiumOverlay(d.leaderboard,d.stats);
   },
 };
@@ -469,7 +434,6 @@ function refreshChart(){
   playerStats.players.forEach(p=>{
     const key = p.nickname.replace(/\W/g,'_');
     const bar = document.getElementById('pbar-'+key);
-    const cnt = document.getElementById('pbar-'+key);
     if(!bar) return;
     const h = Math.round((p.correct / tq) * maxH);
     bar.style.height = h + 'px';
@@ -532,7 +496,6 @@ function startAutoAdvance(){
 
 /* ── Podium overlay (game_end dan keyin, results ustida) ── */
 function renderPodiumOverlay(lb,stats){
-  // Mavjud overlay bo'lsa o'chirish
   const old=document.getElementById('podium-overlay');
   if(old) old.remove();
 
@@ -554,7 +517,7 @@ function renderPodiumOverlay(lb,stats){
   const overlay=document.createElement('div');
   overlay.id='podium-overlay';
   overlay.style.cssText=
-    'position:fixed;inset:60px 0 0 0;background:rgba(18,0,43,.92);'+
+    'position:fixed;inset:0;background:rgba(18,0,43,.92);'+
     'display:flex;flex-direction:column;align-items:center;justify-content:center;'+
     'z-index:100;animation:fi .4s ease;text-align:center;padding:24px;overflow-y:auto;';
   overlay.innerHTML=
@@ -590,9 +553,6 @@ function startTimer(){
   clearInterval(timerInterval);
   timerInterval=setInterval(()=>{
     timeLeft=Math.max(0,timeLeft-1);
-    document.getElementById('tnum').textContent=timeLeft;
-    setCTimer(timeLeft/totalTime*100);
-    if(timeLeft<=5) document.getElementById('ctimer').classList.add('urgent');
     if(timeLeft===0){
       clearInterval(timerInterval);
       if(!reviewDone){
@@ -602,12 +562,7 @@ function startTimer(){
   },1000);
 }
 
-function setCTimer(pct){
-  const t=document.getElementById('ctimer');
-  t.style.setProperty('--p',pct.toFixed(1));
-  t.style.background='conic-gradient('+(pct<20?'#ff4d4d':'#ffd60a')+
-    ' calc('+pct.toFixed(1)+'*1%),rgba(255,255,255,.1) 0)';
-}
+function setCTimer(pct){ /* topbar yo'q */ }
 
 /* ── Game over ── */
 function renderGameOver(lb,stats){
