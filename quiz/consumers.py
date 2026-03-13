@@ -13,13 +13,36 @@ class GameConsumer(AsyncWebsocketConsumer):
         self.role      = kwargs.get('role', 'player')
         self.player_id = kwargs.get('player_id', None)
         self.room      = f'game_{self.game_pin}'
+
+        game_exists = await self.check_game_exists()
+        if not game_exists:
+            await self.close()
+            return
+
         await self.channel_layer.group_add(self.room, self.channel_name)
         await self.accept()
+
         if self.role == 'player' and self.player_id:
             await self.set_player_channel(self.player_id, self.channel_name)
 
+        await self.send_current_state()
+
     async def disconnect(self, code):
         await self.channel_layer.group_discard(self.room, self.channel_name)
+        if self.role == 'player' and self.player_id:
+            removed = await self.remove_player_if_waiting(self.player_id)
+            if removed:
+                # Lobby'ni yangilash — boshqalar ko'rsin
+                count, players = await self.get_lobby_state()
+                stats = await self.get_stats()
+                await self.channel_layer.group_send(self.room, {
+                    'type': 'lobby_update',
+                    'count': count,
+                    'players': players,
+                    'stats': stats,
+                })
+            else:
+                await self.clear_player_channel(self.player_id)
 
     async def receive(self, text_data):
         data   = json.loads(text_data)
@@ -151,10 +174,83 @@ class GameConsumer(AsyncWebsocketConsumer):
     async def game_end(self, event):
         await self.send(text_data=json.dumps({'action': 'game_end', **event}))
 
+    async def send_current_state(self):
+        """Ulanayotgan foydalanuvchiga joriy game holatini yuboradi (refresh uchun)"""
+        state = await self.get_game_state()
+        if not state:
+            return
+        status = state['status']
+
+        if status == 'waiting':
+            count, players = await self.get_lobby_state()
+            stats = await self.get_stats()
+            await self.send(text_data=json.dumps({
+                'action': 'lobby_update',
+                'count': count, 'players': players, 'stats': stats,
+            }))
+
+        elif status == 'question':
+            idx = state['current_question_index']
+            q = await self.get_question(idx)
+            stats = await self.get_stats()
+            player_stats = await self.get_player_stats()
+            if q:
+                if self.role == 'player':
+                    q_data = dict(q)
+                    q_data['answers'] = [
+                        {'id': a['id'], 'text': a['text'], 'color': a['color']}
+                        for a in q_data.get('answers', [])
+                    ]
+                else:
+                    q_data = q
+                await self.send(text_data=json.dumps({
+                    'action': 'question_show', 'question': q_data,
+                    'index': idx, 'stats': stats, 'player_stats': player_stats,
+                }))
+
+        elif status == 'finished':
+            lb = await self.get_leaderboard()
+            stats = await self.get_stats()
+            await self.send(text_data=json.dumps({
+                'action': 'game_end', 'leaderboard': lb, 'stats': stats,
+            }))
+
     @database_sync_to_async
     def set_player_channel(self, player_id, channel_name):
         from .models import Player
         Player.objects.filter(id=player_id).update(channel_name=channel_name)
+
+    @database_sync_to_async
+    def clear_player_channel(self, player_id):
+        from .models import Player
+        Player.objects.filter(id=player_id).update(channel_name='')
+
+    @database_sync_to_async
+    def remove_player_if_waiting(self, player_id):
+        """Game 'waiting' holatida bo'lsa player'ni o'chiradi. O'chirildi → True"""
+        from .models import Player, GameSession
+        try:
+            session = GameSession.objects.get(game_pin=self.game_pin)
+            if session.status == 'waiting':
+                Player.objects.filter(id=player_id, session=session).delete()
+                return True
+        except GameSession.DoesNotExist:
+            pass
+        return False
+
+    @database_sync_to_async
+    def check_game_exists(self):
+        from .models import GameSession
+        return GameSession.objects.filter(game_pin=self.game_pin).exists()
+
+    @database_sync_to_async
+    def get_game_state(self):
+        from .models import GameSession
+        try:
+            s = GameSession.objects.get(game_pin=self.game_pin)
+            return {'status': s.status, 'current_question_index': s.current_question_index}
+        except GameSession.DoesNotExist:
+            return None
 
     @database_sync_to_async
     def get_lobby_state(self):

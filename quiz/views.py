@@ -75,8 +75,13 @@ def player_join(request, game_pin):
             return render(request, 'player_join.html',
                           {'session': session, 'avatars': avatars, 'error': 'Nickname kiriting'})
         if Player.objects.filter(session=session, nickname__iexact=nickname).exists():
-            return render(request, 'player_join.html',
-                          {'session': session, 'avatars': avatars, 'error': 'Bu nickname band, boshqa nom tanlang'})
+            # Agar o'sha player channel_name bo'sh bo'lsa (offline) — eski recordni o'chirib yangi yaratamiz
+            existing = Player.objects.filter(session=session, nickname__iexact=nickname).first()
+            if existing and not existing.channel_name:
+                existing.delete()
+            else:
+                return render(request, 'player_join.html',
+                              {'session': session, 'avatars': avatars, 'error': 'Bu nickname band, boshqa nom tanlang'})
         player = Player.objects.create(session=session, nickname=nickname, avatar=avatar)
         request.session['player_id'] = player.id
         return redirect('player_lobby', game_pin=game_pin)
