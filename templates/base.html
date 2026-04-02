@@ -123,6 +123,7 @@ a:hover { text-decoration: underline; }
   <a href="/" class="logo">Quiz<span>Arena</span></a>
   <div class="nav-links">
     {% if user.is_authenticated %}
+    <a href="https://t.me/online_support_for_otabek_bot" target="_blank" class="btn btn-secondary">Dasturni qo'llab quvvatlash</a>
       <a href="{% url 'my_quizzes' %}" class="btn btn-secondary">Mening quizlarim</a>
       <a href="{% url 'create_quiz' %}" class="btn btn-primary">+ Yaratish</a>
       <a href="{% url 'logout' %}" class="btn btn-secondary">Chiqish</a>
