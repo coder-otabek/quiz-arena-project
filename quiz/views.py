@@ -4,7 +4,7 @@ from django.contrib.auth import login, logout, authenticate
 from django.contrib.auth.decorators import login_required
 from django.contrib.auth.models import User
 from django.http import JsonResponse
-from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.csrf import csrf_exempt, ensure_csrf_cookie
 from .models import QuizSet, Question, Answer, GameSession, Player
 
 
@@ -65,17 +65,17 @@ def join_game(request):
         return redirect('index')
     return redirect('index')
 
+
 def player_join(request, game_pin):
     session = get_object_or_404(GameSession, game_pin=game_pin, status='waiting')
     avatars = ['🎮', '🚀', '⭐', '🦁', '🐯', '🦊', '🐸', '🎯', '🔥']
     if request.method == 'POST':
-        nickname = request.POST.get('nickname', '').strip()  # ← bu qator kerak!
+        nickname = request.POST.get('nickname', '').strip()
         avatar = request.POST.get('avatar', '🎮')
         if not nickname:
             return render(request, 'player_join.html',
                           {'session': session, 'avatars': avatars, 'error': 'Nickname kiriting'})
         if Player.objects.filter(session=session, nickname__iexact=nickname).exists():
-            # Agar o'sha player channel_name bo'sh bo'lsa (offline) — eski recordni o'chirib yangi yaratamiz
             existing = Player.objects.filter(session=session, nickname__iexact=nickname).first()
             if existing and not existing.channel_name:
                 existing.delete()
@@ -86,6 +86,7 @@ def player_join(request, game_pin):
         request.session['player_id'] = player.id
         return redirect('player_lobby', game_pin=game_pin)
     return render(request, 'player_join.html', {'session': session, 'avatars': avatars})
+
 
 def player_lobby(request, game_pin):
     session = get_object_or_404(GameSession, game_pin=game_pin)
@@ -108,6 +109,7 @@ def my_quizzes(request):
 
 
 @login_required
+@ensure_csrf_cookie
 def create_quiz(request):
     return render(request, 'create_quiz.html')
 
@@ -161,6 +163,7 @@ def save_quiz(request):
 
 
 @login_required
+@ensure_csrf_cookie
 def edit_quiz(request, quiz_id):
     quiz = get_object_or_404(QuizSet, id=quiz_id, creator=request.user)
     questions = quiz.questions.prefetch_related('answers').all()
