@@ -154,6 +154,8 @@
 {% endblock %}
 
 {% block content %}
+<form id="csrf-form" style="display:none;">{% csrf_token %}</form>
+
 <div style="padding:16px 20px 0;display:flex;justify-content:space-between;align-items:center;max-width:1100px;margin:0 auto;flex-wrap:wrap;gap:10px;">
   <a href="{% url 'my_quizzes' %}" class="btn btn-secondary">← Orqaga</a>
   <button class="save-btn" onclick="saveQuiz()">💾 Saqlash</button>
@@ -346,7 +348,10 @@ async function saveQuiz() {
   const body = { name, questions, quiz_id: quizId };
   const res = await fetch('/quizzes/save/', {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json', 'X-CSRFToken': getCookie('csrftoken') },
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRFToken': getCookie('csrftoken'),
+    },
     body: JSON.stringify(body),
   });
   const data = await res.json();
@@ -366,8 +371,21 @@ function showToast(msg) {
 }
 
 function getCookie(name) {
-  const v = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
-  return v ? v[2] : null;
+  // Avval hidden form'dan ol
+  const csrfInput = document.querySelector('[name=csrfmiddlewaretoken]');
+  if (csrfInput) return csrfInput.value;
+  // Yo'q bo'lsa cookie'dan qidir
+  let cookieValue = null;
+  if (document.cookie && document.cookie !== '') {
+    for (let cookie of document.cookie.split(';')) {
+      cookie = cookie.trim();
+      if (cookie.startsWith(name + '=')) {
+        cookieValue = decodeURIComponent(cookie.slice(name.length + 1));
+        break;
+      }
+    }
+  }
+  return cookieValue;
 }
 </script>
 {% endblock %}
